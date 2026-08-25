@@ -1,0 +1,28 @@
+# Full-load reference table: small, no reliable watermark, read whole each run
+# and merged on the account key. All columns, all rows.
+version: 1
+
+table:
+  domain: finance
+  source_schema: GLOWNER
+  source_object: GL_ACCOUNTS
+  business_key: [ACCOUNT_ID]
+  description: Chart of accounts
+  owner: finance-data@example.com
+
+extraction:
+  mode: full
+  columns: "*"
+
+target:
+  write_mode: merge
+  merge_guard: none               # no watermark to compare -- last write wins
+
+quality:
+  expectations:
+    - column: ACCOUNT_ID
+      rule: unique
+
+schedule:
+  group: finance_daily
+  cron: "0 0 2 * * ?"

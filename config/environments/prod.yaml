@@ -1,0 +1,35 @@
+version: 1
+env: prod
+
+source:
+  secret_scope: oracle-prod
+  fetch_size: 50000
+  jdbc:
+    url: "jdbc:oracle:thin:@//prod-oracle-scan:1521/DWHPRD"
+
+target:
+  catalog: prod_lakehouse
+  schema: bronze
+
+control:
+  catalog: prod_lakehouse
+  schema: control
+
+runtime:
+  retries: 3
+
+alerting:
+  # !append keeps whatever a table already declared and adds the on-call rota,
+  # instead of replacing it the way a plain list would.
+  on_failure: !append ["email:data-eng-oncall@example.com", "slack:#data-alerts"]
+  on_reconciliation_mismatch: !append ["email:data-eng-oncall@example.com"]
+
+overrides:
+  finance.gl_transactions:
+    source:
+      read:
+        num_partitions: 32   # widest table, most headroom in prod
+    runtime:
+      timeout_minutes: 240
+    alerting:
+      freshness_sla_hours: 4

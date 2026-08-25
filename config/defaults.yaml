@@ -1,0 +1,92 @@
+# Framework-wide defaults. Every table inherits these; table configs override
+# them; environment configs override both. Keep this file free of anything
+# table-specific or environment-specific.
+version: 1
+
+source:
+  type: oracle
+  fetch_size: 10000
+  secret_keys:
+    username: username
+    password: password
+  jdbc:
+    driver: oracle.jdbc.OracleDriver
+    # Deterministic date/timestamp text so pushed-down predicates and any
+    # string-typed watermark compare the way we expect, regardless of the
+    # session's NLS defaults.
+    session_init_statement: >-
+      BEGIN
+        EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_DATE_FORMAT=''YYYY-MM-DD HH24:MI:SS''';
+        EXECUTE IMMEDIATE 'ALTER SESSION SET NLS_TIMESTAMP_FORMAT=''YYYY-MM-DD HH24:MI:SS.FF6''';
+      END;
+    options: {}
+  # Force Spark's JDBC type mapping where Oracle's is ambiguous, e.g. a bare
+  # NUMBER with no precision. Rendered into the JDBC customSchema option.
+  custom_schema: {}
+  read:
+    num_partitions: 1        # raise per table, together with partition_column
+    partition_column: null
+    bounds_strategy: auto    # auto = framework probes MIN/MAX; explicit = you supply them
+
+extraction:
+  mode: full                 # full | incremental | query
+  columns: "*"               # "*" or an explicit list of Oracle identifiers
+  filter: null               # static WHERE fragment, ANDed with the incremental predicate
+  query_file: null
+  row_limit: null
+  incremental:
+    strategy: watermark      # watermark | scn
+    watermark_column: null
+    watermark_type: timestamp
+    overlap: PT0S            # lookback to re-scan for late-arriving updates
+    lower_bound_default: "1900-01-01 00:00:00"
+    # auto = inclusive lower bound for idempotent (merge) targets, exclusive for
+    # append targets. See DESIGN 3.9 for why the choice is not free.
+    bound_inclusive: auto    # auto | true | false
+    # Pin an upper bound from the source clock so parallel JDBC partitions all
+    # see the same cut of the table.
+    use_upper_bound: true
+
+target:
+  layer: bronze
+  format: delta
+  write_mode: merge          # Bronze is a 1:1 current-state mirror of Oracle
+  merge_keys: []             # defaults to table.business_key
+  merge_guard: watermark     # blocks out-of-order replays overwriting newer rows
+  enable_change_data_feed: false
+  partition_by: []           # usually empty -- prefer cluster_by on merge keys
+  cluster_by: []             # defaults to merge_keys for merge tables
+  add_audit_columns: true
+  schema_evolution: true
+  column_case: preserve      # preserve = true 1:1 mirror of Oracle | lower
+  table_properties: {}
+
+quality:
+  row_count_reconciliation: true
+  fail_on_schema_drift: false
+  null_check_keys: true
+  expectations: []
+
+runtime:
+  enabled: true
+  retries: 2
+  retry_backoff_seconds: 30
+  timeout_minutes: 120
+
+logging:
+  level: INFO
+
+alerting:
+  on_failure: []
+  on_reconciliation_mismatch: []
+  on_freshness_breach: []
+  freshness_sla_hours: null
+
+schedule:
+  group: default            # one job per group; depends_on becomes a task edge
+  cron: null                # quartz expression, e.g. "0 15 * * * ?"
+  timezone: UTC
+  # The framework already retries transient source errors and records each
+  # attempt. Job retries only help with infrastructure failure (driver loss),
+  # so they default off to keep the audit trail readable.
+  job_retries: 0

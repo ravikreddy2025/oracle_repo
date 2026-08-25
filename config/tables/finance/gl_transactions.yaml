@@ -1,0 +1,51 @@
+# Primary pattern: incremental extraction by timestamp watermark, merged into
+# a 1:1 Bronze mirror. Selective columns and a static row filter are both in
+# play and both push down to Oracle.
+version: 1
+
+table:
+  domain: finance
+  source_schema: GLOWNER
+  source_object: GL_TRANSACTIONS
+  business_key: [TXN_ID]
+  description: General ledger transaction lines
+  owner: finance-data@example.com
+
+source:
+  read:
+    num_partitions: 16
+    partition_column: TXN_ID     # numeric key -> bounded parallel JDBC read
+
+extraction:
+  mode: incremental
+  columns:                        # selective columns
+    - TXN_ID
+    - ACCOUNT_ID
+    - POSTED_DATE
+    - AMOUNT
+    - CURRENCY
+    - STATUS
+    - LAST_UPDATE_DATE
+  filter: "STATUS <> 'DELETED'"   # selective rows
+  incremental:
+    watermark_column: LAST_UPDATE_DATE
+    watermark_type: timestamp
+    overlap: PT6H                 # re-scan 6h for late-arriving updates
+
+target:
+  write_mode: merge
+  merge_keys: [TXN_ID]            # would default from business_key anyway
+  cluster_by: [TXN_ID]
+
+quality:
+  expectations:
+    - column: AMOUNT
+      rule: not_null
+    - column: CURRENCY
+      rule: in_set
+      values: ["USD", "EUR", "GBP", "INR"]
+      action: warn
+
+schedule:
+  group: finance_hourly
+  cron: "0 15 * * * ?"

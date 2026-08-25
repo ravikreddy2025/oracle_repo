@@ -1,0 +1,37 @@
+# Override case: an immutable event stream. Rows are never updated at source,
+# so merging would be wasted work -- this table overrides the framework default
+# to append, and uses the SCN strategy because there is no update timestamp.
+version: 1
+
+table:
+  domain: sales
+  source_schema: SALESOWNER
+  source_object: ORDER_EVENTS
+  business_key: [EVENT_ID]
+  description: Append-only order lifecycle events
+  owner: sales-data@example.com
+
+source:
+  read:
+    num_partitions: 8
+    partition_column: EVENT_ID
+
+extraction:
+  mode: incremental
+  columns: "*"
+  incremental:
+    strategy: scn                 # ORA_ROWSCN, no watermark column needed
+    watermark_type: number
+    lower_bound_default: 0        # SCNs are numeric; the inherited timestamp floor
+                                  # would be meaningless here (and is rejected)
+
+target:
+  write_mode: append              # override: history is the point here
+  partition_by: [_ingested_date]
+
+runtime:
+  retries: 1
+
+schedule:
+  group: sales_hourly
+  cron: "0 30 * * * ?"

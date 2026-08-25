@@ -1,0 +1,20 @@
+version: 1
+env: test
+
+source:
+  secret_scope: oracle-test
+  jdbc:
+    url: "jdbc:oracle:thin:@//test-oracle-scan:1521/DWHTST"
+
+target:
+  catalog: test_lakehouse
+  schema: bronze
+
+control:
+  catalog: test_lakehouse
+  schema: control
+
+alerting:
+  on_failure: ["email:data-eng-test@example.com"]
+
+overrides: {}

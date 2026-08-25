@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://internal/ingestion-framework/config.schema.json",
+  "title": "Effective ingestion config (post-merge)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "table", "source", "extraction", "target", "control"],
+  "properties": {
+    "version": { "const": 1 },
+    "env": { "type": "string", "minLength": 1 },
+    "extends": { "type": "string" },
+
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "name", "source_schema", "source_object"],
+      "properties": {
+        "domain": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "source_schema": { "type": "string", "minLength": 1 },
+        "source_object": { "type": "string", "minLength": 1 },
+        "business_key": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "owner": { "type": "string" },
+        "depends_on": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["oracle"] },
+        "fetch_size": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "secret_scope": { "type": "string" },
+        "custom_schema": { "type": "object", "additionalProperties": { "type": "string" } },
+        "secret_keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "username": { "type": "string" },
+            "password": { "type": "string" }
+          }
+        },
+        "jdbc": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "driver": { "type": "string" },
+            "url": { "type": ["string", "null"] },
+            "session_init_statement": { "type": ["string", "null"] },
+            "options": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } }
+          }
+        },
+        "read": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "num_partitions": { "type": "integer", "minimum": 1, "maximum": 512 },
+            "partition_column": { "type": ["string", "null"] },
+            "lower_bound": { "type": ["string", "number", "null"] },
+            "upper_bound": { "type": ["string", "number", "null"] },
+            "bounds_strategy": { "enum": ["auto", "explicit"] }
+          }
+        }
+      }
+    },
+
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["full", "incremental", "query"] },
+        "columns": {
+          "oneOf": [
+            { "const": "*" },
+            { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+          ]
+        },
+        "exclude_columns": { "type": "array", "items": { "type": "string" } },
+        "filter": { "type": ["string", "null"] },
+        "query_file": { "type": ["string", "null"] },
+        "row_limit": { "type": ["integer", "null"], "minimum": 1 },
+        "incremental": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "strategy": { "enum": ["watermark", "scn"] },
+            "watermark_column": { "type": ["string", "null"] },
+            "watermark_type": { "enum": ["timestamp", "date", "number"] },
+            "overlap": { "type": "string", "pattern": "^P(?!$)(\\d+Y)?(\\d+M)?(\\d+D)?(T(?=\\d)(\\d+H)?(\\d+M)?(\\d+S)?)?$" },
+            "lower_bound_default": { "type": ["string", "number"] },
+            "bound_inclusive": { "enum": ["auto", true, false] },
+            "use_upper_bound": { "type": "boolean" }
+          }
+        }
+      }
+    },
+
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "schema", "write_mode"],
+      "properties": {
+        "catalog": { "type": "string", "minLength": 1 },
+        "schema": { "type": "string", "minLength": 1 },
+        "table_name": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "layer": { "enum": ["bronze", "silver"] },
+        "format": { "enum": ["delta"] },
+        "write_mode": { "enum": ["merge", "append", "overwrite"] },
+        "merge_keys": { "type": "array", "items": { "type": "string" } },
+        "merge_guard": { "enum": ["watermark", "none"] },
+        "enable_change_data_feed": { "type": "boolean" },
+        "partition_by": { "type": "array", "items": { "type": "string" } },
+        "cluster_by": { "type": "array", "items": { "type": "string" } },
+        "add_audit_columns": { "type": "boolean" },
+        "schema_evolution": { "type": "boolean" },
+        "column_case": { "enum": ["preserve", "lower"] },
+        "table_properties": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+
+    "control": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalog", "schema"],
+      "properties": {
+        "catalog": { "type": "string", "minLength": 1 },
+        "schema": { "type": "string", "minLength": 1 }
+      }
+    },
+
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "row_count_reconciliation": { "type": "boolean" },
+        "fail_on_schema_drift": { "type": "boolean" },
+        "null_check_keys": { "type": "boolean" },
+        "expectations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["column", "rule"],
+            "properties": {
+              "column": { "type": "string" },
+              "rule": { "enum": ["not_null", "unique", "in_set", "min", "max", "regex"] },
+              "values": { "type": "array" },
+              "value": { "type": ["string", "number"] },
+              "pattern": { "type": "string" },
+              "action": { "enum": ["warn", "fail"] }
+            }
+          }
+        }
+      }
+    },
+
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "retries": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "retry_backoff_seconds": { "type": "integer", "minimum": 0 },
+        "timeout_minutes": { "type": "integer", "minimum": 1 },
+        "enabled": { "type": "boolean" }
+      }
+    },
+
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] }
+      }
+    },
+
+    "alerting": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_failure": { "type": "array", "items": { "type": "string" } },
+        "on_reconciliation_mismatch": { "type": "array", "items": { "type": "string" } },
+        "on_freshness_breach": { "type": "array", "items": { "type": "string" } },
+        "freshness_sla_hours": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "group": { "type": "string" },
+        "cron": { "type": ["string", "null"] },
+        "timezone": { "type": "string" },
+        "job_retries": { "type": "integer", "minimum": 0, "maximum": 5 }
+      }
+    }
+  }
+}

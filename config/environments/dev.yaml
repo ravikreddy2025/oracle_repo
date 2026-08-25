@@ -1,0 +1,31 @@
+# Development environment. The global block applies to every table; the
+# overrides block tunes individual tables for this environment only.
+version: 1
+env: dev
+
+source:
+  secret_scope: oracle-dev
+  jdbc:
+    url: "jdbc:oracle:thin:@//dev-oracle-scan:1521/DWHDEV"
+
+target:
+  catalog: dev_lakehouse
+  schema: bronze
+
+control:
+  catalog: dev_lakehouse
+  schema: control
+
+logging:
+  level: DEBUG
+
+alerting:
+  on_failure: []             # no paging from dev
+
+overrides:
+  finance.gl_transactions:
+    extraction:
+      row_limit: 100000      # keep dev pulls small
+    source:
+      read:
+        num_partitions: 4    # dev Oracle is shared -- stay light

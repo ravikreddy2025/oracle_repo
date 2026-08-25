@@ -1,0 +1,129 @@
+# GENERATED FILE -- do not edit.
+# Source: config/ (tables, environments) via tools/generate_bundle.py
+# Regenerate: python tools/generate_bundle.py --env prod
+
+resources:
+  jobs:
+    ingest_finance_daily:
+      name: ingest_prod_finance_daily
+      job_clusters:
+      - job_cluster_key: ingest_cluster
+        new_cluster:
+          spark_version: ${var.spark_version}
+          node_type_id: ${var.node_type}
+          num_workers: ${var.workers}
+          data_security_mode: SINGLE_USER
+          spark_conf:
+            spark.databricks.delta.schema.autoMerge.enabled: 'true'
+      max_concurrent_runs: 1
+      tags:
+        managed_by: ingestion-framework
+        schedule_group: finance_daily
+      tasks:
+      - task_key: finance_gl_accounts
+        job_cluster_key: ingest_cluster
+        python_wheel_task:
+          package_name: ingestion_framework
+          entry_point: ingest
+          parameters:
+          - run
+          - --table
+          - finance.gl_accounts
+          - --env
+          - ${bundle.target}
+          - --config-root
+          - ${workspace.file_path}/config
+          - --trigger
+          - schedule
+        max_retries: 0
+        timeout_seconds: 7200
+        description: Chart of accounts
+      schedule:
+        quartz_cron_expression: 0 0 2 * * ?
+        timezone_id: UTC
+        pause_status: UNPAUSED
+      email_notifications:
+        on_failure:
+        - data-eng-oncall@example.com
+    ingest_finance_hourly:
+      name: ingest_prod_finance_hourly
+      job_clusters:
+      - job_cluster_key: ingest_cluster
+        new_cluster:
+          spark_version: ${var.spark_version}
+          node_type_id: ${var.node_type}
+          num_workers: ${var.workers}
+          data_security_mode: SINGLE_USER
+          spark_conf:
+            spark.databricks.delta.schema.autoMerge.enabled: 'true'
+      max_concurrent_runs: 1
+      tags:
+        managed_by: ingestion-framework
+        schedule_group: finance_hourly
+      tasks:
+      - task_key: finance_gl_transactions
+        job_cluster_key: ingest_cluster
+        python_wheel_task:
+          package_name: ingestion_framework
+          entry_point: ingest
+          parameters:
+          - run
+          - --table
+          - finance.gl_transactions
+          - --env
+          - ${bundle.target}
+          - --config-root
+          - ${workspace.file_path}/config
+          - --trigger
+          - schedule
+        max_retries: 0
+        timeout_seconds: 14400
+        description: General ledger transaction lines
+      schedule:
+        quartz_cron_expression: 0 15 * * * ?
+        timezone_id: UTC
+        pause_status: UNPAUSED
+      email_notifications:
+        on_failure:
+        - data-eng-oncall@example.com
+    ingest_sales_hourly:
+      name: ingest_prod_sales_hourly
+      job_clusters:
+      - job_cluster_key: ingest_cluster
+        new_cluster:
+          spark_version: ${var.spark_version}
+          node_type_id: ${var.node_type}
+          num_workers: ${var.workers}
+          data_security_mode: SINGLE_USER
+          spark_conf:
+            spark.databricks.delta.schema.autoMerge.enabled: 'true'
+      max_concurrent_runs: 1
+      tags:
+        managed_by: ingestion-framework
+        schedule_group: sales_hourly
+      tasks:
+      - task_key: sales_order_events
+        job_cluster_key: ingest_cluster
+        python_wheel_task:
+          package_name: ingestion_framework
+          entry_point: ingest
+          parameters:
+          - run
+          - --table
+          - sales.order_events
+          - --env
+          - ${bundle.target}
+          - --config-root
+          - ${workspace.file_path}/config
+          - --trigger
+          - schedule
+        max_retries: 0
+        timeout_seconds: 7200
+        description: Append-only order lifecycle events
+      schedule:
+        quartz_cron_expression: 0 30 * * * ?
+        timezone_id: UTC
+        pause_status: UNPAUSED
+      email_notifications:
+        on_failure:
+        - data-eng-oncall@example.com

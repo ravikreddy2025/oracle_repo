@@ -1,0 +1,82 @@
+# Databricks Asset Bundle root.
+#
+# Job definitions under resources/ are GENERATED from the config tree -- see
+# tools/generate_bundle.py. This file holds only what belongs to deployment:
+# where the bundle lands, which cluster it runs on, and who owns it.
+#
+#   databricks bundle validate -t prod
+#   databricks bundle deploy   -t prod
+#   databricks bundle run ingest_finance_hourly -t prod
+
+bundle:
+  name: oracle-ingestion-framework
+
+include:
+  - resources/*.yml
+
+# The config tree is deployed alongside the wheel; the jobs point at it via
+# ${workspace.file_path}/config, so a config change ships without a code change.
+sync:
+  include:
+    - config/**
+
+artifacts:
+  ingestion_framework:
+    type: whl
+    build: python -m build --wheel
+    path: .
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://adb-000000000000000.0.azuredatabricks.net
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    resources:
+      jobs: {}
+    variables:
+      node_type: Standard_DS3_v2
+      workers: 2
+
+  test:
+    mode: development
+    workspace:
+      host: https://adb-000000000000000.0.azuredatabricks.net
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      node_type: Standard_DS4_v2
+      workers: 4
+
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-000000000000000.0.azuredatabricks.net
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+    # Production jobs run as a service principal, not as whoever deployed them.
+    run_as:
+      service_principal_name: ${var.service_principal}
+    permissions:
+      - level: CAN_VIEW
+        group_name: data-engineering
+    variables:
+      node_type: Standard_DS5_v2
+      workers: 8
+
+variables:
+  node_type:
+    description: Worker node type for the ingestion job cluster.
+    default: Standard_DS3_v2
+  workers:
+    description: Number of workers in the ingestion job cluster.
+    default: 2
+  service_principal:
+    description: Service principal that production jobs run as.
+    default: REPLACE_WITH_SERVICE_PRINCIPAL_APPLICATION_ID
+  spark_version:
+    description: Databricks Runtime. 14.3 LTS or later (liquid clustering, Delta APIs).
+    default: 15.4.x-scala2.12
+
+# Every generated job references this cluster by key.
+resources:
+  jobs: {}
